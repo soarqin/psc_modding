@@ -71,8 +71,10 @@ int read_game_id(const char *filename, char *gameid) {
         /* Remove trail ';' and file index from filename */
         n = strchr(curr, ';');
         if (n != NULL) *n = 0;
-        /* Check filename format SL??_NNN.NN */
-        if (curr[0] == 'S' && curr[1] == 'L' && curr[4] == '_' && curr[5] >= '0' && curr[5] <= '9' && curr[8] == '.') {
+        /* Check filename format S[CL][PEU]?_NNN.NN */
+        if (curr[0] == 'S' && (curr[1] == 'C' || curr[1] == 'L') && (curr[2] == 'P' || curr[2] == 'E' || curr[2] == 'U') && curr[4] == '_'
+            && curr[5] >= '0' && curr[5] <= '9' && curr[6] >= '0' && curr[6] <= '9' && curr[7] >= '0' && curr[7] <= '9' && curr[8] == '.'
+            && curr[9] >= '0' && curr[9] <= '9' && curr[10] >= '0' && curr[10] <= '9' && curr[11] == '0') {
             strcpy(gameid, curr);
             /* Remove '.' */
             memmove(gameid + 8, gameid + 9, strlen(gameid + 9) + 1);
