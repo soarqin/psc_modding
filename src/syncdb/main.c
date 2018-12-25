@@ -15,79 +15,116 @@ int read_game_id(const char *filename, char *gameid) {
     };
     /* Header + 32bytes ID ("PLAYSTATION" with space paddings) */
     static const char header[] = "\x1" "CD001" "\x1\x0" "PLAYSTATION                     ";
-    char buf[2048 * 2];
     uint32_t size, offset, offset2, total;
-    FILE *fd = fopen(filename, "rb");
-    if (fd == NULL) return -1;
+    FILE *fd;
+    char *buf = malloc(2048);
+    if (buf == NULL) return -5;
+    fd = fopen(filename, "rb");
+    if (fd == NULL) {
+        free(buf);
+        return -1;
+    }
     fseek(fd, SECTOR_SIZE * 16 + 24, SEEK_SET);
     if (fread(buf, 1, 2048, fd) != 2048) {
+        free(buf);
         fclose(fd);
         return -2;
     }
     if (memcmp(buf, header, 40) != 0) {
+        free(buf);
         fclose(fd);
         return -3;
     }
 
-    /* Path table size and offset */
-    size = *(uint32_t*)(buf+132);
-    offset = *(uint32_t*)(buf+140);
+    /* Root path record offset and size */
+    offset = *(uint32_t*)(buf+158);
+    size = *(uint32_t*)(buf+166);
+    free(buf);
 
-    /* Read path table */
-    fseek(fd, SECTOR_SIZE * offset + 24, SEEK_SET);
-    if (size < 8 || fread(buf, 1, size, fd) < size) {
+    /* Read whole root path record */
+    buf = malloc(size);
+    if (buf == NULL) {
         fclose(fd);
-        return -2;
+        return -5;
     }
-
-    /* Read 1st 2048 bytes of root path records */
-    offset = *(uint32_t*)(buf+2) * SECTOR_SIZE + 24;
-    fseek(fd, offset, SEEK_SET);
-    if (fread(buf, 1, 2048, fd) != 2048) {
-        fclose(fd);
-        return -2;
+    total = size;
+    offset2 = 0u;
+    while (offset2 < total) {
+        size = offset2 + 2048 < total ? 2048 : total - offset2;
+        /* Read 1st 2048 bytes of root path records */
+        fseek(fd, offset * SECTOR_SIZE + 24, SEEK_SET);
+        if (fread(buf + offset2, 1, size, fd) != size) {
+            free(buf);
+            fclose(fd);
+            return -2;
+        }
+        offset2 += size;
     }
     offset2 = 0u;
-    total = 2048u;
-    while (1) {
+    while (offset2 < total) {
         uint32_t sz = (uint8_t)buf[offset2];
-        char *n, *curr;
+        char *curr;
         if (sz < 33) break;
-        /* Read next 2048 bytes of root path records if needed */
-        if (offset2 + sz > total) {
-            uint32_t left = total - offset2;
-            memmove(buf, buf + offset2, left);
-            offset += SECTOR_SIZE;
-            fseek(fd, offset, SEEK_SET);
-            if (fread(buf + left, 1, 2048, fd) < 2048) {
+        if (offset2 + sz > total) break;
+        /* Get filename */
+        curr = buf + offset2 + 33;
+        /* Boot config filename should be "SYSTEM.CNF;1" */
+        if (strcasecmp(curr, "SYSTEM.CNF;1") == 0) {
+            char buf2[2048], *sub;
+            offset = *(uint32_t*)(buf + offset2 + 2);
+            size = *(uint32_t*)(buf + offset2 + 10);
+            if (size > 2048) size = 2048;
+            fseek(fd, offset * SECTOR_SIZE + 24, SEEK_SET);
+            if (fread(buf2, 1, size, fd) != size) {
+                free(buf);
                 fclose(fd);
                 return -2;
             }
-            total = left + 2048u;
-            offset2 = 0u;
-        }
-        /* Get filename */
-        curr = buf + offset2 + 33;
-        /* Remove trail ';' and file index from filename */
-        n = strchr(curr, ';');
-        if (n != NULL) *n = 0;
-        /* Check filename format S[CL][PEU]?_NNN.NN */
-        if (curr[0] == 'S' && (curr[1] == 'C' || curr[1] == 'L') && (curr[2] == 'P' || curr[2] == 'E' || curr[2] == 'U') && curr[4] == '_'
-            && curr[5] >= '0' && curr[5] <= '9' && curr[6] >= '0' && curr[6] <= '9' && curr[7] >= '0' && curr[7] <= '9' && curr[8] == '.'
-            && curr[9] >= '0' && curr[9] <= '9' && curr[10] >= '0' && curr[10] <= '9' && curr[11] == '0') {
-            strcpy(gameid, curr);
-            /* Remove '.' */
-            memmove(gameid + 8, gameid + 9, strlen(gameid + 9) + 1);
-            /* Replace '_' with '-' */
-            gameid[4] = '-';
-            fclose(fd);
+            sub = strstr(buf2, "BOOT");
+            if (sub == NULL) {
+                /* Wrong boot config file */
+                free(buf);
+                fclose(fd);
+                return -6;
+            }
+            sub += 4;
+            while(*sub == ' ' || *sub == '\t') ++sub;
+            if (*sub != '=') {
+                /* Wrong boot config file */
+                free(buf);
+                fclose(fd);
+                return -6;
+            }
+            ++sub;
+            while(*sub == ' ' || *sub == '\t') ++sub;
+            if (strncasecmp(sub, "cdrom:\\", 7) != 0) {
+                /* Wrong boot config file */
+                free(buf);
+                fclose(fd);
+                return -6;
+            }
+            sub += 7;
+            while(*sub != 0 && *sub != ';' && *sub != '\r' && *sub != '\n') {
+                switch (*sub) {
+                    case '_':
+                        *gameid++ = '-';
+                    case '.':
+                        ++sub;
+                        break;
+                    default:
+                        *gameid++ = *sub++;
+                        break;
+                }
+            }
+            *gameid = 0;
             return 0;
         }
         offset2 += sz;
         total -= sz;
     }
-    /* No filename as GameID was found */
+    free(buf);
     fclose(fd);
+    /* No filename as GameID was found */
     return -4;
 }
 
