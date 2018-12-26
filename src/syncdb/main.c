@@ -186,7 +186,8 @@ static int disc_info_compare(const void *v1, const void *v2) {
 static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     int i;
     char filename[256] = {};
-    int disc_count = 0;
+    char prepend[64];
+    int disc_count = 0, total_discs = 0, append_disc = 0;
     disc_info_t discs[8];
     struct dirent *d_it;
     DIR *p_dir = opendir(dirname);
@@ -233,7 +234,18 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     closedir(p_dir);
     if (disc_count <= 0) return -1;
     qsort(discs, disc_count, sizeof(disc_info_t), disc_info_compare);
+    {
+        char *tok = strtok(def->discs, ",");
+        while (tok != NULL) {
+            ++total_discs;
+            tok = strtok(NULL, ",");
+        }
+    }
     def->discs[0] = 0;
+    append_disc = total_discs > 1 && disc_count < total_discs;
+    if (append_disc) {
+        strncpy(prepend, "[Disc ", 63);
+    }
     for (i = 0; i < disc_count; ++i) {
         if (i == 0) {
             strncpy(def->game_id, discs[i].game_id, 31);
@@ -242,6 +254,16 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
             strncat(def->discs, ",", 2047 - strlen(def->discs));
             strncat(def->discs, discs[i].filename, 2047 - strlen(def->discs));
         }
+        if (append_disc) {
+            char append_str[32];
+            snprintf(append_str, 32, i == 0 ? "%d" : ",%d", discs[i].disc_number);
+            strncat(prepend, append_str, 63 - strlen(prepend));
+        }
+    }
+    if (append_disc) {
+        char temp[256];
+        snprintf(temp, 256, "%s/%d] %s", prepend, total_discs, def->title);
+        strncpy(def->title, temp, 255);
     }
     return 0;
 }
