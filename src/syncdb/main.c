@@ -145,15 +145,15 @@ static int _ini_handler(void* user, const char* section, const char* name, const
 #define MATCH(s, n) strcmp(section, s) == 0 && strcmp(name, n) == 0
     game_def_t *def = (game_def_t*)user;
     if (MATCH("Game", "Discs")) {
-        strncpy(def->discs, value, 2048);
+        strncpy(def->discs, value, 2047);
         return 1;
     }
     if (MATCH("Game", "Title")) {
-        strncpy(def->title, value, 256);
+        strncpy(def->title, value, 255);
         return 1;
     }
     if (MATCH("Game", "Publisher")) {
-        strncpy(def->publisher, value, 256);
+        strncpy(def->publisher, value, 255);
         return 1;
     }
     if (MATCH("Game", "Players")) {
@@ -183,7 +183,7 @@ static int disc_info_compare(const void *v1, const void *v2) {
 
 static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     int i;
-    char filename[256];
+    char filename[256] = {};
     int disc_count = 0;
     disc_info_t discs[8];
     struct dirent *d_it;
@@ -200,7 +200,7 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
         if (len < 4 || strcmp(d_it->d_name + len - 4, ".cue") != 0 || strchr(d_it->d_name, ',') != NULL) continue;
         d_it->d_name[len - 4] = 0;
         snprintf(filename, 256, "%s/%s.bin", dirname, d_it->d_name);
-        strncpy(discs[disc_count].filename, d_it->d_name, 256);
+        strncpy(discs[disc_count].filename, d_it->d_name, 255);
         if (read_game_id(filename, discs[disc_count].game_id) < 0) continue;
         snprintf(query_str, 256, "SELECT `discno`,`name`,`date`,`publisher`,`players`,`discs` FROM `games` WHERE `id`='%s'", discs[disc_count].game_id);
         if (sqlite3_prepare_v2(sql, query_str, -1, &stmt, NULL) != SQLITE_OK)
@@ -218,9 +218,9 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
                 if (s != NULL) def->year = strtol(s+1, NULL, 10);
                 if (def->year == 0) def->year = 1999;
                 def->players = sqlite3_column_int(stmt, 4);
-                strncpy(def->title, (const char*)sqlite3_column_text(stmt, 1), 256);
-                strncpy(def->publisher, (const char*)sqlite3_column_text(stmt, 3), 256);
-                strncpy(def->discs, discs_str, 2048);
+                strncpy(def->title, (const char*)sqlite3_column_text(stmt, 1), 255);
+                strncpy(def->publisher, (const char*)sqlite3_column_text(stmt, 3), 255);
+                strncpy(def->discs, discs_str, 2047);
             }
             discs[disc_count].disc_number = sqlite3_column_int(stmt, 0);
             ++disc_count;
@@ -233,10 +233,10 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     def->discs[0] = 0;
     for (i = 0; i < disc_count; ++i) {
         if (i == 0)
-            strncpy(def->discs, discs[i].filename, 2048);
+            strncpy(def->discs, discs[i].filename, 2047);
         else {
-            strncat(def->discs, ",", 2048);
-            strncat(def->discs, discs[i].filename, 2048);
+            strncat(def->discs, ",", 2047 - strlen(def->discs));
+            strncat(def->discs, discs[i].filename, 2047 - strlen(def->discs));
         }
     }
     return 0;
