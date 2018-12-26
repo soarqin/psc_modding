@@ -272,8 +272,7 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
         game_def_t def = {};
         struct stat st;
         snprintf(dirname, 256, "%s/%d/GameData", basedir, ++i);
-        stat(dirname, &st);
-        if (!S_ISDIR(st.st_mode))
+        if (stat(dirname, &st) != 0 || !S_ISDIR(st.st_mode))
             break;
         /* Parse ini file */
         snprintf(filename, 256, "%s/%d/GameData/Game.ini", basedir, i);
