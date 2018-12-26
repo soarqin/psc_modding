@@ -13,7 +13,7 @@ mkdir -p /media/mod/logs
 mkdir -p /media/mod/data/sony/ui
 
 # Sync database from games list
-[ -f /media/mod/bin/syncdb ] && chmod +x /media/mod/bin/syncdb && /media/mod/bin/syncdb /media/games /media/mod/gaadata/databases/regional.db 1>/media/mod/logs/syncdb.log 2>&1
+[ -f /media/mod/bin/syncdb ] && chmod +x /media/mod/bin/syncdb && /media/mod/bin/syncdb /media/games /media/mod/gaadata/databases/regional.db /media/mod/share/db/psx_games.db 1>/media/mod/logs/syncdb.log 2>&1
 
 # Copy the BIOS files to USB
 [ ! -f /media/mod/gaadata/system/bios/romw.bin ] && cp -r /gaadata/system/bios/* /media/mod/gaadata/system/bios
@@ -62,8 +62,8 @@ ln -s /usr/sony/bin/plugins /tmp/datatmp/AppData/sony/pcsx/plugins
 
 # Fix for last selected game issue. If not in place user may experience UI issue
 sed -i "s/iUiUserSettingLastSelectGameCursorPos.*/iUiUserSettingLastSelectGameCursorPos=0/" /tmp/datatmp/AppData/sony/ui/user.pre
-# Do not reverse O and X
-sed -i 's/bUiSystemSettingReverseEnterKey=true/bUiSystemSettingReverseEnterKey=false/' /tmp/gaadatatmp/preferences/regional.pre
+# Uncomment this to force not reversing O and X (like JP models)
+# sed -i 's/bUiSystemSettingReverseEnterKey=true/bUiSystemSettingReverseEnterKey=false/' /tmp/gaadatatmp/preferences/regional.pre
 
 # Reload and apply udev rules that were overmounted above
 # Allows both controllers to be detected through a USB hub
