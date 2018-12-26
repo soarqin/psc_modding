@@ -197,7 +197,6 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     while(disc_count < 8 && (d_it = readdir(p_dir)) != NULL) {
         sqlite3_stmt *stmt;
         size_t len;
-        char query_str[256];
         if (d_it->d_name[0] == '.') continue;
         len = strlen(d_it->d_name);
         if (len < 4 || strcmp(d_it->d_name + len - 4, ".cue") != 0 || strchr(d_it->d_name, ',') != NULL) continue;
@@ -205,15 +204,16 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
         snprintf(filename, 256, "%s/%s.bin", dirname, d_it->d_name);
         strncpy(discs[disc_count].filename, d_it->d_name, 255);
         if (read_game_id(filename, discs[disc_count].game_id) < 0) continue;
-        snprintf(query_str, 256, "SELECT `discno`,`name`,`date`,`publisher`,`players`,`discs` FROM `games` WHERE `id`='%s'", discs[disc_count].game_id);
-        if (sqlite3_prepare_v2(sql, query_str, -1, &stmt, NULL) != SQLITE_OK)
+        if (sqlite3_prepare_v2(sql, "SELECT `discno`,`name`,`date`,`publisher`,`players`,`discs` FROM `games` WHERE `id`=?", -1, &stmt, NULL) != SQLITE_OK)
             continue;
+        sqlite3_bind_text(stmt, 1, discs[disc_count].game_id, -1, NULL);
         if (sqlite3_step(stmt) == SQLITE_ROW) {
             const char *discs_str = (const char*)sqlite3_column_text(stmt, 5);
             if (def->discs[0] != 0) {
                 if (strcmp(discs_str, def->discs) != 0) {
                     fprintf(stderr, "More than one game found in %s (%s <-> %s)", dirname, def->discs, discs_str);
                     fflush(stderr);
+                    sqlite3_finalize(stmt);
                     break;
                 }
             } else {
@@ -266,6 +266,33 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
         strncpy(def->title, temp, 255);
     }
     return 0;
+}
+
+void get_main_disc_id(sqlite3 *sql, const char *disc_id, char *main_disc_id) {
+    sqlite3_stmt *stmt;
+    if (sql == NULL) {
+        strcpy(main_disc_id, disc_id);
+        return;
+    }
+    if (sqlite3_prepare_v2(sql, "SELECT `discs` FROM `games` WHERE `id`=?", -1, &stmt, NULL) != SQLITE_OK) {
+        strcpy(main_disc_id, disc_id);
+        return;
+    }
+    sqlite3_bind_text(stmt, 1, disc_id, -1, NULL);
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        char discs[256] = {};
+        char *tok;
+        strncpy(discs, (const char*)sqlite3_column_text(stmt, 0), 255);
+        tok = strtok(discs, ",");
+        if (tok != NULL) {
+            strcpy(main_disc_id, discs);
+        } else {
+            strcpy(main_disc_id, disc_id);
+        }
+    } else {
+        strcpy(main_disc_id, disc_id);
+    }
+    sqlite3_finalize(stmt);
 }
 
 /* Sync games to sqlite database */
@@ -347,7 +374,9 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb, 
                                 read_game_id(bin_filename, def.game_id);
                             }
                             if (def.game_id[0] != 0) {
-                                snprintf(internal_name, 256, "%s.png", def.game_id);
+                                char main_game_id[32];
+                                get_main_disc_id(games_sql, def.game_id, main_game_id);
+                                snprintf(internal_name, 256, "%s.png", main_game_id);
                                 if (!mz_zip_reader_extract_file_to_file(&zip, internal_name, filename, 0)) {
                                     mz_zip_reader_extract_file_to_file(&zip, "default.png", filename, 0);
                                 }
