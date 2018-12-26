@@ -1,6 +1,7 @@
 #include "ini.h"
 
 #include <sqlite3.h>
+#include <miniz.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -137,6 +138,7 @@ typedef struct {
     char discs[2048];
     char title[256];
     char publisher[256];
+    char game_id[32];
     int players;
     int year;
 } game_def_t;
@@ -233,9 +235,10 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     qsort(discs, disc_count, sizeof(disc_info_t), disc_info_compare);
     def->discs[0] = 0;
     for (i = 0; i < disc_count; ++i) {
-        if (i == 0)
+        if (i == 0) {
+            strncpy(def->game_id, discs[i].game_id, 31);
             strncpy(def->discs, discs[i].filename, 2047);
-        else {
+        } else {
             strncat(def->discs, ",", 2047 - strlen(def->discs));
             strncat(def->discs, discs[i].filename, 2047 - strlen(def->discs));
         }
@@ -244,9 +247,10 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
 }
 
 /* Sync games to sqlite database */
-int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) {
+int database_sync(const char *basedir, const char *dbpath, const char *gamesdb, const char *coverzip) {
     sqlite3 *sql, *games_sql;
     int i = 0, disc_id = 0;
+    struct stat st;
 
     /* Open database */
     if (sqlite3_open(dbpath, &sql) != SQLITE_OK)
@@ -255,6 +259,10 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
     /* Try to open games database */
     if (gamesdb == NULL || sqlite3_open_v2(gamesdb, &games_sql, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) {
         games_sql = NULL;
+    }
+    /* Check cover zip */
+    if (stat(coverzip, &st) != 0 || !S_ISREG(st.st_mode)) {
+        coverzip = NULL;
     }
 
     /* Delete old data and create tables if needed */
@@ -270,7 +278,6 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
         sqlite3_stmt *stmt = NULL;
         char dirname[256], filename[256];
         game_def_t def = {};
-        struct stat st;
         snprintf(dirname, 256, "%s/%d/GameData", basedir, ++i);
         if (stat(dirname, &st) != 0 || !S_ISDIR(st.st_mode))
             break;
@@ -304,6 +311,30 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
             sqlite3_finalize(stmt);
             /* Split discs */
             token = strtok(def.discs, ",");
+            if (token != NULL) {
+                if (coverzip) {
+                    snprintf(filename, 256, "%s/%s.png", dirname, token);
+                    if (stat(filename, &st) != 0 || !S_ISREG(st.st_mode)) {
+                        mz_zip_archive zip;
+                        memset(&zip, 0, sizeof(zip));
+                        if (mz_zip_reader_init_file(&zip, coverzip, 0)) {
+                            char internal_name[256];
+                            if (def.game_id[0] == 0) {
+                                char bin_filename[256];
+                                snprintf(bin_filename, 256, "%s/%s.bin", dirname, token);
+                                read_game_id(bin_filename, def.game_id);
+                            }
+                            if (def.game_id[0] != 0) {
+                                snprintf(internal_name, 256, "%s.png", def.game_id);
+                                if (!mz_zip_reader_extract_file_to_file(&zip, internal_name, filename, 0)) {
+                                    mz_zip_reader_extract_file_to_file(&zip, "default.png", filename, 0);
+                                }
+                                mz_zip_reader_end(&zip);
+                            }
+                        }
+                    }
+                }
+            }
             while(token != NULL) {
                 /* Insert disc data into table */
                 if (sqlite3_prepare_v2(sql, "INSERT INTO `DISC`(`DISC_ID`,`GAME_ID`,`DISC_NUMBER`,`BASENAME`) "
@@ -333,6 +364,6 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
 
 int main(int argc, char *argv[]) {
     if (argc < 3) return -1;
-    database_sync(argv[1], argv[2], argc > 3 ? argv[3] : NULL);
+    database_sync(argv[1], argv[2], argc > 3 ? argv[3] : NULL, argc > 4 ? argv[4] : NULL);
     return 0;
 }
