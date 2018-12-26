@@ -210,6 +210,7 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
             if (def->discs[0] != 0) {
                 if (strcmp(discs_str, def->discs) != 0) {
                     fprintf(stderr, "More than one game found in %s (%s <-> %s)", dirname, def->discs, discs_str);
+                    fflush(stderr);
                     break;
                 }
             } else {
@@ -283,9 +284,9 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
         }
         /* Insert game data into table */
         if (use_ini)
-            printf("Adding %s (from %s)... ", def.title, filename);
+            fprintf(stdout, "Adding %s (from %s)... ", def.title, filename);
         else
-            printf("Adding %s (from internal database)... ", def.title);
+            fprintf(stdout, "Adding %s (from internal database)... ", def.title);
         if (sqlite3_prepare_v2(sql, "INSERT INTO `GAME`(`GAME_ID`,`GAME_TITLE_STRING`,`PUBLISHER_NAME`,`RELEASE_YEAR`,`PLAYERS`,`RATING_IMAGE`,`GAME_MANUAL_QR_IMAGE`,`LINK_GAME_ID`) "
                                     "VALUES(?,?,?,?,?,'CERO_A','QR_Code_GM','')", -1, &stmt, NULL) == SQLITE_OK) {
             int disc_number = 0;
@@ -297,7 +298,8 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
             sqlite3_bind_int(stmt, 5, def.players);
             if(sqlite3_step(stmt) != SQLITE_DONE) {
                 sqlite3_finalize(stmt);
-                printf("Unable to insert game record: %s (from %s)\n", def.title, filename);
+                fprintf(stdout, "Unable to insert game record: %s (from %s)\n", def.title, filename);
+                fflush(stdout);
                 continue;
             }
             sqlite3_finalize(stmt);
@@ -312,13 +314,15 @@ int database_sync(const char *basedir, const char *dbpath, const char *gamesdb) 
                     sqlite3_bind_int(stmt, 3, ++disc_number);
                     sqlite3_bind_text(stmt, 4, token, -1, NULL);
                     if(sqlite3_step(stmt) != SQLITE_DONE) {
-                        printf("Unable to insert disc record: %s (from %s)\n", token, filename);
+                        fprintf(stdout, "Unable to insert disc record: %s (from %s)\n", token, filename);
+                        fflush(stdout);
                     }
                     sqlite3_finalize(stmt);
                 }
                 token = strtok(NULL, ",");
             }
-            printf("Success\n");
+            fprintf(stdout, "Success\n");
+            fflush(stdout);
         }
     }
     /* Execute VACUUM to shrink space use */
