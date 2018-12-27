@@ -11,8 +11,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
-/* (Reserved for future use)
- * Read game id from disc, using CD-ROM mode2 type1 */
+/* Read game id from disc, using CD-ROM mode2 type1 */
 int read_game_id(const char *filename, char *gameid) {
     enum {
         SECTOR_SIZE = 2352,
@@ -109,6 +108,7 @@ int read_game_id(const char *filename, char *gameid) {
                 return -6;
             }
             sub += 6;
+            // Skip '/' after cdrom:
             while(*sub == '/' || *sub == '\\') ++sub;
             while(*sub != 0 && *sub != ';' && *sub != '\r' && *sub != '\n') {
                 switch (*sub) {
@@ -130,7 +130,7 @@ int read_game_id(const char *filename, char *gameid) {
     }
     free(buf);
     fclose(fd);
-    /* No filename as GameID was found */
+    /* No SYSTEM.CNF was found */
     return -4;
 }
 
@@ -176,6 +176,7 @@ typedef struct {
     char game_id[32];
 } disc_info_t;
 
+/* Compare function used to sort discs */
 static int disc_info_compare(const void *v1, const void *v2) {
     const disc_info_t *d1 = (const disc_info_t *)v1;
     const disc_info_t *d2 = (const disc_info_t *)v2;
@@ -190,6 +191,8 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     int disc_count = 0, total_discs = 0, append_disc = 0;
     disc_info_t discs[8];
     struct dirent *d_it;
+
+    /* Start scanning dir */
     DIR *p_dir = opendir(dirname);
     if (p_dir == NULL)
         return -1;
@@ -197,13 +200,18 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     while(disc_count < 8 && (d_it = readdir(p_dir)) != NULL) {
         sqlite3_stmt *stmt;
         size_t len;
+        /* skip files/dirs started with '.' */
         if (d_it->d_name[0] == '.') continue;
         len = strlen(d_it->d_name);
+        /* check .cue file */
         if (len < 4 || strcmp(d_it->d_name + len - 4, ".cue") != 0 || strchr(d_it->d_name, ',') != NULL) continue;
         d_it->d_name[len - 4] = 0;
+        /* replace extension by .bin */
         snprintf(filename, 256, "%s/%s.bin", dirname, d_it->d_name);
         strncpy(discs[disc_count].filename, d_it->d_name, 255);
+        /* get game id from disc bin */
         if (read_game_id(filename, discs[disc_count].game_id) < 0) continue;
+        /* query game info from internal game info db */
         if (sqlite3_prepare_v2(sql, "SELECT `discno`,`name`,`date`,`publisher`,`players`,`discs` FROM `games` WHERE `id`=?", -1, &stmt, NULL) != SQLITE_OK)
             continue;
         sqlite3_bind_text(stmt, 1, discs[disc_count].game_id, -1, NULL);
@@ -211,12 +219,14 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
             const char *discs_str = (const char*)sqlite3_column_text(stmt, 5);
             if (def->discs[0] != 0) {
                 if (strcmp(discs_str, def->discs) != 0) {
+                    /* different games in same folder, issue error */
                     fprintf(stderr, "More than one game found in %s (%s <-> %s)", dirname, def->discs, discs_str);
                     fflush(stderr);
                     sqlite3_finalize(stmt);
                     break;
                 }
             } else {
+                /* copy game info to game_def_t */
                 const char *date = (const char*)sqlite3_column_text(stmt, 2);
                 char *s = strrchr(date, ' ');
                 if (s != NULL) def->year = strtol(s+1, NULL, 10);
@@ -233,8 +243,10 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
     }
     closedir(p_dir);
     if (disc_count <= 0) return -1;
+    /* sort games by disc no */
     qsort(discs, disc_count, sizeof(disc_info_t), disc_info_compare);
     {
+        /* calculate total disc count in this game */
         char *tok = strtok(def->discs, ",");
         while (tok != NULL) {
             ++total_discs;
@@ -242,6 +254,7 @@ static int scan_dir(const char *dirname, sqlite3 *sql, game_def_t *def) {
         }
     }
     def->discs[0] = 0;
+    /* if not all discs of this game are in the folder, prepend [N/T] to game title */
     append_disc = total_discs > 1 && disc_count < total_discs;
     if (append_disc) {
         strncpy(prepend, "[Disc ", 63);
