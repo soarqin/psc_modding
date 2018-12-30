@@ -3,18 +3,8 @@ HOW-TO
 1. Format your USB disk as FAT32.
 2. Copy all files in `usb_root` to root directory of your USB disk.
 3. (Optional) Copy [covers.zip](https://drive.google.com/open?id=1OWaQJp6KdcwAiiu9GG8Fxt2f3aEcFUqA) with game covers to /mod/share/db/ of your USB disk (for auto cover image use).
-4. Copy PSX cue/bin pairs into games/{number}/GameData folder, add a png file with size 226x226 with the same filename as .cue file which is used as cover image.
-5. (Optional) You can put a Game.ini in GameData folder to set game info manually:
-
-        [Game]
-        Discs=SLUS-00594,SLUS-00776
-        Title=Metal Gear Solid
-        Publisher=Konami
-        Players=1
-        Year=1998
-
-   Otherwise game info is automatically fetched from embedded PSX game info database.
-6. Connect USB disk to your PlayStation Classic and boot the machine, have fun!
+4. Copy PSX bin/img/iso files into games folder, multi-disc games will be recognized automatically, but you can create subfolders in games folder, each subfolder contains a set of discs of a single game (or split multi-disc games into different subfolders to load them as different games)
+5. Connect USB disk to your PlayStation Classic and boot the machine, have fun!
 
 CREDITS
 =======
