@@ -2,7 +2,7 @@ HOW-TO
 ======
 1. Format your USB disk as FAT32.
 2. Copy all files in `usb_root` to root directory of your USB disk.
-3. (Optional) Copy covers.zip with game covers to /mod/share/db/ of your USB disk (for auto cover image use).
+3. (Optional) Copy [covers.zip](https://drive.google.com/open?id=1OWaQJp6KdcwAiiu9GG8Fxt2f3aEcFUqA) with game covers to /mod/share/db/ of your USB disk (for auto cover image use).
 4. Copy PSX cue/bin pairs into games/{number}/GameData folder, add a png file with size 226x226 with the same filename as .cue file which is used as cover image.
 5. (Optional) You can put a Game.ini in GameData folder to set game info manually:
 

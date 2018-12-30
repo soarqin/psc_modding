@@ -1,0 +1,12 @@
+#!/bin/sh
+
+sleep 2
+
+killall -s KILL sonyapp showLogo ui_menu
+
+mkdir -p /media/mod/logs
+chmod +x /media/mod/bin/bootstrap
+/media/mod/bin/bootstrap 1>/media/mod/logs/boot.log 2>/media/mod/logs/boot_err.log
+sync
+sync
+reboot
