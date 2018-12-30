@@ -25,13 +25,16 @@ static int _ini_handler(void* user, const char* section, const char* name, const
     if (user_data->curr == NULL) return 0;
 #define MATCH(n) strcmp(name, n) == 0
     if (MATCH("fullpath")) {
-        strncpy(user_data->curr->fullpath, value, 255);
+        strncpy(user_data->curr->fullpath, value, PATH_MAX-1);
     }
     if (MATCH("game_id")) {
         strncpy(user_data->curr->game_id, value, 31);
     }
     if (MATCH("mtime")) {
         user_data->curr->mtime = strtoull(value, 0, 10);
+    }
+    if (MATCH("group")) {
+        user_data->curr->group = strtol(value, 0, 10);
     }
 #undef MATCH
 }
@@ -69,7 +72,7 @@ game_cache_t *games_cache_new(games_cache_t *list, int good) {
     return result;
 }
 
-game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath) {
+game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath, int group) {
     int i;
     int was_bad = 0;
     struct stat st;
@@ -92,7 +95,7 @@ game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath) {
         }
     }
     if (found) {
-        if (list->caches[i].found && st.st_mtime != list->caches[i].mtime) {
+        if (st.st_mtime != list->caches[i].mtime || group != list->caches[i].group) {
             char game_id[32];
             int good = cdrom_get_game_id(fullpath, game_id) == 0;
             game_cache_t *conf;
@@ -107,6 +110,7 @@ game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath) {
                     conf = found;
                 }
                 strncpy(conf->game_id, game_id, 31);
+                conf->group = group;
             } else {
                 if (was_bad) {
                     conf = found;
@@ -119,7 +123,7 @@ game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath) {
                 }
                 conf->game_id[0] = 0;
             }
-            strncpy(conf->fullpath, fullpath, 255);
+            strncpy(conf->fullpath, fullpath, PATH_MAX-1);
             conf->mtime = st.st_mtime;
             list->dirty = 1;
             return conf;
@@ -135,9 +139,10 @@ game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath) {
         conf = games_cache_new(list, good);
         if (!conf) return NULL;
         conf->found = 1;
+        conf->group = group;
         if (good) strncpy(conf->game_id, game_id, 31);
         else conf->game_id[0] = 0;
-        strncpy(conf->fullpath, fullpath, 255);
+        strncpy(conf->fullpath, fullpath, PATH_MAX-1);
         conf->mtime = st.st_mtime;
         list->dirty = 1;
         return conf;
@@ -168,6 +173,7 @@ void games_cache_save(games_cache_t *list, const char *filename) {
         fprintf(f, "fullpath=%s\n", list->caches[i].fullpath);
         fprintf(f, "game_id=%s\n", list->caches[i].game_id);
         fprintf(f, "mtime=%llu\n", (unsigned long long)list->caches[i].mtime);
+        fprintf(f, "group=%d\n", (unsigned long long)list->caches[i].group);
     }
     idx = 0;
     for (i = 0; i < list->bad_count; ++i) {
@@ -176,6 +182,7 @@ void games_cache_save(games_cache_t *list, const char *filename) {
         fprintf(f, "fullpath=%s\n", list->bad_caches[i].fullpath);
         fprintf(f, "mtime=%llu\n", (unsigned long long)list->bad_caches[i].mtime);
     }
+    fflush(f);
     fclose(f);
 }
 

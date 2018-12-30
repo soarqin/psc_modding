@@ -10,7 +10,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include <unistd.h>
-#include <limits.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <sys/types.h>

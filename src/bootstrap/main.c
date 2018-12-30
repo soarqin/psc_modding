@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <limits.h>
 #include <getopt.h>
 
 int main(int argc, char *argv[]) {
@@ -36,16 +35,16 @@ int main(int argc, char *argv[]) {
                 mod_dir = optarg;
                 break;
             case 'c':
-                strncpy(cache_file, optarg, 255);
+                strncpy(cache_file, optarg, PATH_MAX-1);
                 break;
             case 'd':
-                strncpy(gamedb_file, optarg, 255);
+                strncpy(gamedb_file, optarg, PATH_MAX-1);
                 break;
             case 'i':
-                strncpy(infodb_file, optarg, 255);
+                strncpy(infodb_file, optarg, PATH_MAX-1);
                 break;
             case 'v':
-                strncpy(covers_file, optarg, 255);
+                strncpy(covers_file, optarg, PATH_MAX-1);
                 break;
             case '?':
                 fprintf(stderr, "Unknown option: %s\n", argv[optind - 1]);

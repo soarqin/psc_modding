@@ -57,8 +57,7 @@ void gamedb_read(gamedb_t *db, game_list_t *list) {
             this_game->discs = realloc(this_game->discs, this_game->discs_cap * sizeof(disc_t));
         }
         disc = &this_game->discs[this_game->discs_count++];
-        strncpy(disc->filename, sqlite3_column_text(stmt, 2), 31);
-        strncpy(disc->game_id, disc->filename, 31);
+        strncpy(disc->game_id, sqlite3_column_text(stmt, 2), 31);
         strncpy(disc->fullpath, sqlite3_column_text(stmt, 3), 31);
     }
     sqlite3_finalize(stmt);

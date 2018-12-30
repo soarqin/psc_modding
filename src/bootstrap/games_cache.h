@@ -2,11 +2,13 @@
 
 #include <stdint.h>
 #include <time.h>
+#include <limits.h>
 
 typedef struct {
-    char fullpath[256];
+    char fullpath[PATH_MAX];
     char game_id[32];
     time_t mtime;
+    int group;
     int found;
 } game_cache_t;
 
@@ -25,7 +27,7 @@ extern games_cache_t *games_cache_load(const char *filename);
 extern game_cache_t *games_cache_new(games_cache_t *list, int good);
 
 // Try add game to list, if not exists or mtime is newer than original
-extern game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath);
+extern game_cache_t *games_cache_try_add(games_cache_t *list, const char *fullpath, int group);
 
 // Check for games cache dirty
 extern void games_cache_check_dirty(games_cache_t *list);

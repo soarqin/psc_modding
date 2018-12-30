@@ -2,11 +2,11 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <limits.h>
 
 typedef struct {
-    int disc_no;
-    char fullpath[256];
-    char filename[64];
+    int disc_no, group;
+    char fullpath[PATH_MAX];
     char game_id[32];
 } disc_t;
 

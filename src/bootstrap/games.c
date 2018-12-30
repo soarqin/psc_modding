@@ -12,24 +12,38 @@
 #include <string.h>
 
 typedef struct {
-    disc_t *discs;
+    char fullpath[PATH_MAX];
+    int group;
+} disc_scan_t;
+
+typedef struct {
+    disc_scan_t *discs;
     int discs_count, discs_cap;
+    int group;
+    char group_path[PATH_MAX];
 } disc_info_t;
 
-static void scan_callback(void *user, const char *dirname, const char *filename) {
+static void scan_callback(void *user, const char *dirname, const char *filename, int level) {
     disc_info_t *di;
-    disc_t *d;
+    disc_scan_t *d;
     size_t len = strlen(filename);
     /* check .bin/cue/img file */
     if (len < 4 || (strcasecmp(filename + len - 4, ".bin") != 0 && strcasecmp(filename + len - 4, ".iso") != 0 && strcasecmp(filename + len - 4, ".img") != 0)) return;
     di = (disc_info_t*)user;
     if (di->discs_count >= di->discs_cap) {
         di->discs_cap += 8;
-        di->discs = realloc(di->discs, sizeof(disc_t) * di->discs_cap);
+        di->discs = realloc(di->discs, sizeof(disc_scan_t) * di->discs_cap);
         if (di->discs == NULL) return;
     }
     d = &di->discs[di->discs_count++];
-    snprintf(d->fullpath, 256, "%s/%s", dirname, filename);
+    memset(d, 0, sizeof(disc_scan_t));
+    snprintf(d->fullpath, PATH_MAX, "%s/%s", dirname, filename);
+    if (level > 0) {
+        if (strcmp(dirname, di->group_path) != 0) {
+            d->group = ++di->group;
+            strncpy(di->group_path, dirname, PATH_MAX-1);
+        } else d->group = di->group;
+    }
 }
 
 static int games_compare(const void *v1, const void *v2) {
@@ -52,7 +66,7 @@ game_list_t *games_scan_dir(const char *dirname, const char *conf_file, const ch
     game_list_t *list = (game_list_t*)calloc(1, sizeof(game_list_t));
     if (list == NULL) return NULL;
     memset(&di, 0, sizeof(disc_info_t));
-    scan_dir(dirname, scan_callback, &di);
+    scan_dir(dirname, scan_callback, 1, &di);
     if (!di.discs) {
         free(list);
         return NULL;
@@ -63,7 +77,7 @@ game_list_t *games_scan_dir(const char *dirname, const char *conf_file, const ch
         return NULL;
     }
     for (i = 0; i < di.discs_count; ++i) {
-        games_cache_try_add(gcache, di.discs[i].fullpath);
+        games_cache_try_add(gcache, di.discs[i].fullpath, di.discs[i].group);
     }
     games_cache_check_dirty(gcache);
     list->dirty = gcache->dirty;
@@ -78,14 +92,15 @@ game_list_t *games_scan_dir(const char *dirname, const char *conf_file, const ch
             return NULL;
         }
         for (i = 0; i < gcache->cache_count; ++i) {
-            int j;
+            int j, group;
             game_t *this_game = NULL;
             disc_t *this_disc = NULL;
             game_info_t info;
+            if (!gcache->caches[i].found) continue;
             if (infodb_query(infodb, gcache->caches[i].game_id, &info) != 0) {
-                char fullpath[256], *basepath, *dot;
+                char fullpath[PATH_MAX], *basepath, *dot;
                 info.disc_no = 1;
-                strncpy(fullpath, gcache->caches[i].fullpath, 255);
+                strncpy(fullpath, gcache->caches[i].fullpath, PATH_MAX-1);
                 basepath = strrchr(fullpath, '/');
                 if (basepath == NULL) basepath = fullpath;
                 dot = strrchr(basepath, '.');
@@ -96,10 +111,24 @@ game_list_t *games_scan_dir(const char *dirname, const char *conf_file, const ch
                 info.players = 1;
                 strncpy(info.discs, gcache->caches[i].game_id, 255);
             }
-            for (j = 0; j < list->games_count; ++j) {
-                if (strcmp(list->games[j].disc_set, info.discs) == 0) {
-                    this_game = &list->games[j];
-                    break;
+            group = gcache->caches[i].group;
+            if (group) {
+                for (j = 0; this_game == NULL && j < list->games_count; ++j) {
+                    int k;
+                    game_t *g = &list->games[j];
+                    for (k = 0; k < g->discs_count; ++k) {
+                        if (g->discs[k].group == group) {
+                            this_game = g;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                for (j = 0; j < list->games_count; ++j) {
+                    if (strcmp(list->games[j].disc_set, info.discs) == 0 && list->games[j].discs[0].group == 0) {
+                        this_game = &list->games[j];
+                        break;
+                    }
                 }
             }
             if (this_game == NULL) {
@@ -133,8 +162,9 @@ game_list_t *games_scan_dir(const char *dirname, const char *conf_file, const ch
             }
             this_disc = &this_game->discs[this_game->discs_count++];
             strncpy(this_disc->game_id, gcache->caches[i].game_id, 31);
-            strncpy(this_disc->fullpath, gcache->caches[i].fullpath, 255);
+            strncpy(this_disc->fullpath, gcache->caches[i].fullpath, PATH_MAX-1);
             this_disc->disc_no = info.disc_no;
+            this_disc->group = group;
         }
         infodb_close(infodb);
         qsort(list->games, list->games_count, sizeof(game_t), games_compare);
