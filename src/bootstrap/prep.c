@@ -1,3 +1,4 @@
+#if !defined(_WIN32)
 #include "prep.h"
 
 #include "games.h"
@@ -312,3 +313,4 @@ int ui_menu_run() {
     chdir("/data/AppData/sony/pcsx");
     return execv("/usr/sony/bin/ui_menu", argv);
 }
+#endif

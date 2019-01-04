@@ -59,7 +59,9 @@ int main(int argc, char *argv[]) {
     if (infodb_file[0] == 0) snprintf(infodb_file, PATH_MAX, "%s/share/db/psx_games.db", mod_dir);
     if (covers_file[0] == 0) snprintf(covers_file, PATH_MAX, "%s/share/db/covers.zip", mod_dir);
     cfg_load(config_file);
+#if !defined(_WIN32)
     prepare_shell(mod_dir);
+#endif
     {
         game_list_t *game_list = games_scan_dir(games_dir, cache_file, infodb_file);
         gamedb_t *gamedb;
@@ -76,8 +78,15 @@ int main(int argc, char *argv[]) {
             gamedb_read(gamedb, game_list);
         }
         gamedb_close(gamedb);
+#if !defined(_WIN32)
         symlink_games(mod_dir, covers_file, game_list);
+#endif
         game_list_free(game_list);
     }
-    return ui_menu_run();
+    return
+#if defined(_WIN32)
+    0;
+#else
+    ui_menu_run();
+#endif
 }
